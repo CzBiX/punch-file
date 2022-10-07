@@ -17,13 +17,13 @@ struct Args {
     #[arg(short, long)]
     verbose: bool,
 
-    #[arg(long, value_parser = maybe_hex::<u64>, default_value_t = 0)]
-    offset: u64,
+    #[arg(long, value_parser = maybe_hex::<u64>, help = "Start offset in file")]
+    offset: Option<u64>,
 
-    #[arg(long, value_parser = maybe_hex::<u64>)]
+    #[arg(long, value_parser = maybe_hex::<u64>, help = "Limit bytes to check")]
     length: Option<u64>,
 
-    #[arg(long)]
+    #[arg(long, help = "Don't actually punch holes")]
     dry_run: bool,
 }
 
@@ -86,10 +86,13 @@ impl Main {
         let mut last_hole = None::<HoleInfo>;
 
         let mut offset = self.offset;
-        let max_offset = cmp::min(
-            self.max_offset.unwrap_or(std::u64::MAX),
-            file.metadata().unwrap().len(),
-        );
+        let max_offset = {
+            let file_size = file.metadata().unwrap().len();
+
+            self.max_offset.map_or(file_size, |max_offset| {
+                cmp::min(file_size, max_offset)
+            })
+        };
 
         loop {
             if offset >= max_offset {
@@ -161,12 +164,13 @@ fn main() {
         println!("Dry run");
     }
 
-    let max_offset = args.length.map(|l| args.offset + l);
+    let offset = args.offset.unwrap_or(0);
+    let max_offset = args.length.map(|l| offset + l);
 
     Main {
         file: args.file,
         verbose: args.verbose,
-        offset: args.offset,
+        offset,
         max_offset,
         dry_run: args.dry_run,
     }
