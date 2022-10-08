@@ -1,3 +1,4 @@
+use std::io::Error;
 use std::mem::MaybeUninit;
 use std::os::unix::prelude::RawFd;
 
@@ -8,19 +9,26 @@ pub fn get_fs_block_size(fd: RawFd) -> u64 {
     let ret = unsafe { libc::fstatvfs(fd, stat.as_mut_ptr()) };
 
     if ret != 0 {
-        panic!("fstat failed");
+        panic!("fstat failed, {}", Error::last_os_error());
     }
     let stat = unsafe { stat.assume_init() };
     stat.f_bsize as u64
 }
 
-pub fn seek_data(fd: RawFd, offset: u64) -> u64 {
+pub fn seek_data(fd: RawFd, offset: u64) -> Option<u64> {
     let ret = unsafe { libc::lseek(fd, offset.try_into().unwrap(), libc::SEEK_DATA) };
     if ret == -1 {
-        panic!("lseek failed");
+        let err = Error::last_os_error();
+        if let Some(err_no) = err.raw_os_error() {
+            if err_no == libc::ENXIO {
+                return None;
+            }
+        }
+
+        panic!("lseek failed, {}", err);
     }
 
-    ret as u64
+    Some(ret as u64)
 }
 
 pub fn is_zeroed(buf: &[u8]) -> bool {

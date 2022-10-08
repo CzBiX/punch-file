@@ -89,9 +89,8 @@ impl Main {
         let max_offset = {
             let file_size = file.metadata().unwrap().len();
 
-            self.max_offset.map_or(file_size, |max_offset| {
-                cmp::min(file_size, max_offset)
-            })
+            self.max_offset
+                .map_or(file_size, |max_offset| cmp::min(file_size, max_offset))
         };
 
         loop {
@@ -99,7 +98,13 @@ impl Main {
                 break;
             }
 
-            let new_offset = seek_data(file.as_raw_fd(), offset);
+            let new_offset = match seek_data(file.as_raw_fd(), offset) {
+                Some(new_offset) => new_offset,
+                None => {
+                    break;
+                }
+            };
+
             if new_offset != offset {
                 if self.verbose {
                     println!(
